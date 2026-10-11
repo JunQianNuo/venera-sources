@@ -1,0 +1,17 @@
+{
+  "name": "venera-sources",
+  "private": true,
+  "version": "1.0.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "test:dist": "node scripts/test-dist.cjs",
+    "build": "node scripts/build.cjs",
+    "build:check": "node scripts/build.cjs --check",
+    "configure": "node scripts/configure.cjs",
+    "verify": "npm test && npm run build:check && npm run test:dist",
+    "live:baozi": "node tests/live-check.cjs",
+    "live:mh1234": "node tests/live-mh1234.cjs"
+  },
+  "devDependencies": { "linkedom": "0.18.12" }
+}

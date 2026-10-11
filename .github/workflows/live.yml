@@ -1,0 +1,40 @@
+name: 手动网站检查
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 要检查的图源
+        required: true
+        type: choice
+        default: mh1234
+        options:
+          - baozi
+          - mh1234
+permissions:
+  contents: read
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: 检查包子漫画
+        if: inputs.source == 'baozi'
+        run: npm run live:baozi
+      - name: 检查漫画1234
+        if: inputs.source == 'mh1234'
+        run: npm run live:mh1234
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: website-check-report
+          path: reports/*.json
+          retention-days: 7
+          if-no-files-found: ignore

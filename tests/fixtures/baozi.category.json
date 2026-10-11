@@ -1,0 +1,29 @@
+{
+  "next": "https://cn.webmota.com/api/bzmhq/amp_comic_list?type=all&region=all&state=all&filter=*&page=2&limit=36&language=cn",
+  "items": [
+    {
+      "comic_id": "dafengdagengren-chuyingshe",
+      "type_names": [
+        "穿越",
+        "古风"
+      ],
+      "author": "初樱社",
+      "name": "大奉打更人",
+      "topic_img": "dafengdagengren-chuyingshe.jpg",
+      "region_name": "国漫",
+      "region": "cn"
+    },
+    {
+      "comic_id": "yirenzhixia-dongmantang",
+      "type_names": [
+        "热血",
+        "冒险"
+      ],
+      "author": "动漫堂",
+      "name": "一人之下",
+      "topic_img": "yirenzhixia-dongmantang.jpg",
+      "region_name": "国漫",
+      "region": "cn"
+    }
+  ]
+}

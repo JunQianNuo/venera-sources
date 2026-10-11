@@ -1,0 +1,26 @@
+name: 图源测试
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run verify
+      - name: 检查修改过的图源是否提高版本号
+        run: node scripts/check-versions.cjs
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
