@@ -2,7 +2,7 @@
 class BaoziFixed extends ComicSource {
   name = "包子漫画（修订版）";
   key = "baozi_fixed";
-  version = "1.1.1";
+  version = "1.1.2";
   minAppVersion = "1.4.0";
   // 构建时会按 repository.json 写入本仓库的更新地址。
   url = "";
@@ -36,11 +36,16 @@ class BaoziFixed extends ComicSource {
     return element ? element.text.trim() : "";
   }
 
-  async request(url, method = "GET", data = "") {
+  async request(url, method = "GET", data = "", noCache = false) {
     const headers = {
       "User-Agent": "Mozilla/5.0",
       "Referer": this.baseUrl + "/"
     };
+    if (noCache) {
+      // Venera 会复用五秒内的 GET，即使期间已经修改网站收藏。
+      headers["cache-time"] = "no";
+      headers["Cache-Control"] = "no-cache";
+    }
     if (method === "POST") {
       headers["Content-Type"] = "application/x-www-form-urlencoded;charset=UTF-8";
       headers["Origin"] = this.baseUrl;
@@ -79,7 +84,11 @@ class BaoziFixed extends ComicSource {
   }
 
   async loadShelf() {
-    const document = new HtmlDocument(await this.request(this.baseUrl + "/user/my_bookshelf"));
+    const cookies = await Network.getCookies(this.baseUrl);
+    if (!cookies.some(cookie => cookie.name === "TSID" && typeof cookie.value === "string" && cookie.value.trim())) {
+      throw new Error("当前入口没有登录会话，请在图源账号中重新登录。");
+    }
+    const document = new HtmlDocument(await this.request(this.baseUrl + "/user/my_bookshelf", "GET", "", true));
     try {
       if (document.querySelector("#mail, input[type=password]")) throw new Error("网站登录已失效，请在图源账号中重新登录；切换网站入口后也需要重新登录。");
       const root = document.querySelector(".bookshelf");
@@ -123,8 +132,9 @@ class BaoziFixed extends ComicSource {
         const present = (await this.loadShelf()).some(comic => comic.id === id);
         // 已收藏时不重复 set_bookmark，避免将网站阅读位置重置至第零章。
         if (present === isAdding) return;
+        // 与官网收藏按钮一致使用 GET；这个操作请求也不可缓存。
         await this.request(this.baseUrl + "/user/operation_v2?op=" + (isAdding ? "set_bookmark" : "del_bookmark") +
-          "&comic_id=" + encodeURIComponent(id) + (isAdding ? "&chapter_slot=0" : ""), "POST");
+          "&comic_id=" + encodeURIComponent(id) + (isAdding ? "&chapter_slot=0" : ""), "GET", "", true);
         if ((await this.loadShelf()).some(comic => comic.id === id) !== isAdding) {
           throw new Error("网站书架同步未生效，请刷新书架确认状态后重试。");
         }

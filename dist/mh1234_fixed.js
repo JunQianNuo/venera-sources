@@ -2,7 +2,7 @@
 class MH1234Fixed extends ComicSource {
   name = "漫画1234（新版网站）";
   key = "mh1234_fixed";
-  version = "1.2.1";
+  version = "1.2.2";
   minAppVersion = "1.4.0";
   url = "https://raw.githubusercontent.com/JunQianNuo/venera-sources/main/dist/mh1234_fixed.js";
 
@@ -51,12 +51,17 @@ class MH1234Fixed extends ComicSource {
     return this.absoluteUrl(image?.attributes["data-src"] || image?.attributes["src"]);
   }
 
-  async request(url, method = "GET", data = "") {
+  async request(url, method = "GET", data = "", noCache = false) {
     const origin = url.startsWith("https://reader.hqread.cc/") ? "https://reader.hqread.cc" : this.baseUrl;
     const headers = {
       "User-Agent": "Mozilla/5.0",
       "Referer": origin + "/"
     };
+    if (noCache) {
+      // 会话和收藏状态必须实时读取，不能复用写入之前的 GET 结果。
+      headers["cache-time"] = "no";
+      headers["Cache-Control"] = "no-cache";
+    }
     if (method === "POST") {
       headers["Content-Type"] = "application/x-www-form-urlencoded;charset=UTF-8";
       headers["Origin"] = origin;
@@ -73,7 +78,7 @@ class MH1234Fixed extends ComicSource {
   }
 
   async accountApi(path, method = "GET", data = "") {
-    return JSON.parse(await this.request("https://reader.hqread.cc/index.php/api/" + path, method, data));
+    return JSON.parse(await this.request("https://reader.hqread.cc/index.php/api/" + path, method, data, true));
   }
 
   async requireSession() {
@@ -98,7 +103,7 @@ class MH1234Fixed extends ComicSource {
       if (!Number.isInteger(page) || page < 1) throw new Error("书架页码不正确。");
       await this.requireSession();
       const url = "https://reader.hqread.cc/user/fav" + (page > 1 ? "/index/" + page : "");
-      const document = new HtmlDocument(await this.request(url));
+      const document = new HtmlDocument(await this.request(url, "GET", "", true));
       try {
         const root = document.querySelector('[data-mint-page="shelf"]');
         if (!root) throw new Error("未找到网站书架，请重新登录或更新图源。");
@@ -173,7 +178,7 @@ class MH1234Fixed extends ComicSource {
   async authorizedImages(epId) {
     // 只查询当前会话已有的权限；购买由用户在网站中完成。
     const url = "https://reader.hqread.cc/index.php/api/comic/isbuy?id=" + epId;
-    const result = JSON.parse(await this.request(url));
+    const result = JSON.parse(await this.request(url, "GET", "", true));
     if (Number(result.code) === 1 && Array.isArray(result.pic)) {
       const images = this.imageUrls(result.pic.map(pic => pic?.img));
       if (!images.length) throw new Error("网站已确认权限，但章节图片暂未就绪，请稍后重试。");

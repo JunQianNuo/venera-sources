@@ -2,7 +2,7 @@
   {
     "name": "包子漫画（修订版）",
     "key": "baozi_fixed",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "minAppVersion": "1.4.0",
     "description": "包子漫画：账号登录、网站书架读写、分类筛选、章节阅读、简繁备用入口。",
     "fileName": "dist/baozi_fixed.js",
@@ -11,7 +11,7 @@
   {
     "name": "漫画1234（新版网站）",
     "key": "mh1234_fixed",
-    "version": "1.2.1",
+    "version": "1.2.2",
     "minAppVersion": "1.4.0",
     "description": "漫画1234：网页登录、网站书架读写、分类筛选、章节阅读和网站地址设置。",
     "fileName": "dist/mh1234_fixed.js",

@@ -21,6 +21,7 @@ function createSource(file = process.env.SOURCE_FILE || 'baozi_fixed.js', networ
   const calls = [];
   const deletedCookies = [];
   const cookies = [];
+  const cookieJar = new Map((options.cookies || []).map(item => [item.url, item.values]));
   const data = new Map();
   let registered = options.registered !== false;
   const requireRegistration = () => { if (!registered) throw new Error('source has not been registered by Venera'); };
@@ -49,9 +50,9 @@ function createSource(file = process.env.SOURCE_FILE || 'baozi_fixed.js', networ
     Comic: class { constructor(fields) { Object.assign(this, fields); } },
     ComicDetails: class { constructor(fields) { Object.assign(this, fields); } },
     Network: {
-      deleteCookies: url => deletedCookies.push(url),
-      setCookies: (url, values) => cookies.push({ url, values }),
-      getCookies: async url => cookies.filter(item => item.url === url).flatMap(item => item.values),
+      deleteCookies: url => { deletedCookies.push(url); cookieJar.delete(url); },
+      setCookies: (url, values) => { cookies.push({ url, values }); cookieJar.set(url, values); },
+      getCookies: async url => cookieJar.get(url) || [],
       get: (url, headers) => request('GET', url, headers),
       post: (url, headers, body) => request('POST', url, headers, body)
     }

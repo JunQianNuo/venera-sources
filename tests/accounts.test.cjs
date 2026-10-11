@@ -11,6 +11,8 @@ const bzLogin = '<title>登入账号 - 包子漫画</title><input id="mail"><inp
 const mhEmpty = '<main data-mint-page="shelf"><div class="mint-shelf-empty">暂无收藏</div></main>';
 const mhShelf = '<main data-mint-page="shelf"><article data-mint-shelf-item><a href="/go/abc">继续阅读</a><a href="/comic/16838.html"><img data-src="https://example.com/19.jpg?st=fixture&e=2000000000" src="/placeholder.svg"><h3>19天</h3></a></article><article data-mint-shelf-item><a href="/comic/47315.html"><img src="/cover.jpg"><h3>恋爱四选一</h3></a></article><div class="mint-pagination" data-pages="3"><a href="/user/fav/index/3">末页</a></div></main><section class="recommend"><article class="comic-card"><a href="/comic/999.html"><h3>推荐</h3></a></article></section>';
 const member = { code: 1, data: { log: 1, id: 123 } };
+const bzSession = { cookies: [{ url: 'https://cn.webmota.com', values: [{ name: 'TSID', value: 'synthetic-test-session' }] }] };
+function bz(network) { return createSource(baoziFile, network, bzSession); }
 
 test('Venera can parse source configuration before registering runtime settings', () => {
   for (const file of [baoziFile, mhFile]) {
@@ -65,7 +67,7 @@ test('Baozi: failed post-login session check removes the newly installed cookie'
 });
 
 test('Baozi: shelf excludes recommendations, supports empty accounts and rejects login/unknown pages', async () => {
-  const { source, calls } = createSource(baoziFile, async () => html(bzShelf));
+  const { source, calls } = bz(async () => html(bzShelf));
   const result = await source.favorites.loadComics(1);
   assert.deepEqual(Array.from(result.comics, c => c.id), ['feirenzai-fenzihudong']);
   assert.equal(result.comics[0].title, '非人哉');
@@ -73,11 +75,11 @@ test('Baozi: shelf excludes recommendations, supports empty accounts and rejects
   assert.equal(result.maxPage, 1);
   assert.equal((await source.favorites.loadComics(2)).comics.length, 0);
   assert.equal(calls.length, 1);
-  const empty = createSource(baoziFile, async () => html(bzEmpty)).source;
+  const empty = bz(async () => html(bzEmpty)).source;
   assert.equal((await empty.favorites.loadComics(1)).comics.length, 0);
   for (const body of [bzLogin, '<title>404</title>', '<div class="bookshelf">unexpected markup</div>',
     '<div class="bookshelf"><li class="pure-menu-selected">临时书架(0)</li>当前没有追任何漫画</div>']) {
-    const bad = createSource(baoziFile, async () => html(body)).source;
+    const bad = bz(async () => html(body)).source;
     await assert.rejects(() => bad.favorites.loadComics(1), /登录|书架/);
   }
 });
@@ -85,8 +87,8 @@ test('Baozi: shelf excludes recommendations, supports empty accounts and rejects
 test('Baozi: add/remove are idempotent and verified, and existing reading position is preserved', async () => {
   for (const adding of [true, false]) {
     let present = !adding;
-    const { source, calls } = createSource(baoziFile, async (url, headers, req) => {
-      if (req.method === 'POST') {
+    const { source, calls } = bz(async (url, headers, req) => {
+      if (url.includes('/operation_v2?')) {
         const query = new URL(url).searchParams;
         assert.equal(query.get('op'), adding ? 'set_bookmark' : 'del_bookmark');
         assert.equal(query.get('comic_id'), 'feirenzai-fenzihudong');
@@ -97,17 +99,65 @@ test('Baozi: add/remove are idempotent and verified, and existing reading positi
     });
     await source.favorites.addOrDelFavorite('feirenzai-fenzihudong', null, adding);
     await source.favorites.addOrDelFavorite('feirenzai-fenzihudong', null, adding);
-    assert.equal(calls.filter(call => call.method === 'POST').length, 1);
+    assert.equal(calls.filter(call => call.url.includes('/operation_v2?')).length, 1);
   }
 });
 
 test('Baozi: expired sessions and unsuccessful writes cannot silently succeed', async () => {
-  const expired = createSource(baoziFile, async () => html(bzLogin));
+  const expired = bz(async () => html(bzLogin));
   await assert.rejects(() => expired.source.favorites.addOrDelFavorite('id', null, true), /登录/);
-  assert.equal(expired.calls.filter(c => c.method === 'POST').length, 0);
-  const failed = createSource(baoziFile, async () => html(bzEmpty));
+  assert.equal(expired.calls.filter(c => c.url.includes('/operation_v2?')).length, 0);
+  const failed = bz(async () => html(bzEmpty));
   await assert.rejects(() => failed.source.favorites.addOrDelFavorite('id', null, true), /未生效|同步/);
 });
+
+test('Baozi: favorite writes follow the website GET link rather than posting an empty form', async () => {
+  for (const adding of [true, false]) {
+    let present = !adding;
+    const { source, calls } = bz(async (url, headers, req) => {
+      if (url.includes('/operation_v2?')) {
+        assert.equal(req.method, 'GET');
+        const query = new URL(url).searchParams;
+        assert.equal(query.get('op'), adding ? 'set_bookmark' : 'del_bookmark');
+        assert.equal(query.get('comic_id'), 'feirenzai-fenzihudong');
+        present = adding;
+      }
+      return html(present ? bzShelf : bzEmpty);
+    });
+    await source.favorites.addOrDelFavorite('feirenzai-fenzihudong', null, adding);
+    assert.equal(calls.filter(c => c.url.includes('/operation_v2?')).length, 1);
+  }
+});
+
+for (const file of [baoziFile, mhFile]) {
+  test((file === baoziFile ? 'Baozi' : 'MH1234') + ': bypass Venera GET caching for current shelf and favorite state', async () => {
+    let present = false;
+    const cached = new Map();
+    const isBaozi = file === baoziFile;
+    const id = isBaozi ? 'feirenzai-fenzihudong' : '16838';
+    const { source, calls } = createSource(file, async (url, headers, req) => {
+      // Venera reuses GET responses younger than five seconds, even after a write.
+      if (req.method === 'GET' && headers['cache-time'] !== 'no' && cached.has(url)) return cached.get(url);
+      let result;
+      if (url.endsWith('/api/user/info')) result = json(member);
+      else if (url.includes('/operation_v2?') || url.endsWith('/rend/favadd')) {
+        present = isBaozi ? new URL(url).searchParams.get('op') === 'set_bookmark' : !present;
+        result = isBaozi ? html(present ? bzShelf : bzEmpty) : json({ code: 1, cid: present ? 1 : 0 });
+      } else if (url.includes('/rend/isfav?')) result = json({ code: present ? 1 : -1, msg: present ? '已收藏' : '未收藏' });
+      else result = html(present ? (isBaozi ? bzShelf : mhShelf) : (isBaozi ? bzEmpty : mhEmpty));
+      if (req.method === 'GET') cached.set(url, result);
+      return result;
+    }, isBaozi ? bzSession : {});
+    await source.favorites.loadComics(1);
+    await source.favorites.addOrDelFavorite(id, null, true);
+    assert.equal(present, true);
+    assert.ok((await source.favorites.loadComics(1)).comics.some(c => c.id === id));
+    await source.favorites.addOrDelFavorite(id, null, false);
+    assert.equal(present, false);
+    assert.equal((await source.favorites.loadComics(1)).comics.length, 0);
+    assert.ok(calls.filter(c => c.method === 'GET').every(c => c.headers['cache-time'] === 'no'));
+  });
+}
 
 test('Baozi: logout clears every configured entry and registration URL stays safe during parsing', () => {
   const { source, deletedCookies } = createSource(baoziFile);
@@ -116,6 +166,13 @@ test('Baozi: logout clears every configured entry and registration URL stays saf
   assert.equal(deletedCookies.length, 3);
   source.loadSetting = () => 'https://tw.dinnerku.com';
   assert.equal(source.account.registerWebsite, 'https://cn.webmota.com/user/signup');
+});
+
+test('Baozi: a guest empty shelf cannot validate a session without a TSID cookie', async () => {
+  const { source, calls } = createSource(baoziFile, async () => html(bzEmpty));
+  await assert.rejects(() => source.favorites.loadComics(1), /登录/);
+  await assert.rejects(() => source.favorites.addOrDelFavorite('feirenzai-fenzihudong', null, true), /登录/);
+  assert.equal(calls.length, 0);
 });
 
 function mh(network) {
@@ -195,23 +252,24 @@ test('both sources prevent concurrent favorite writes from undoing each other', 
     const id = isBaozi ? 'feirenzai-fenzihudong' : '16838';
     const { source, calls } = createSource(file, async (url, headers, req) => {
       if (url.endsWith('/api/user/info')) return json(member);
-      if (req.method === 'POST') {
+      if (req.method === 'POST' || url.includes('/operation_v2?')) {
         present = isBaozi ? true : !present;
         return isBaozi ? html(bzShelf) : json({ code: 1, cid: present ? 1 : 0 });
       }
       if (isBaozi) return html(present ? bzShelf : bzEmpty);
       return json({ code: present ? 1 : -1, msg: present ? '已收藏' : '未收藏' });
-    });
+    }, isBaozi ? bzSession : {});
     const results = await Promise.allSettled([
       source.favorites.addOrDelFavorite(id, null, true),
       source.favorites.addOrDelFavorite(id, null, true)
     ]);
     assert.equal(present, true);
-    assert.equal(calls.filter(c => c.method === 'POST').length, 1);
+    const writes = () => calls.filter(c => c.method === 'POST' || c.url.includes('/operation_v2?')).length;
+    assert.equal(writes(), 1);
     assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
     assert.match(results.find(r => r.status === 'rejected').reason.message, /正在|稍后/);
     await source.favorites.addOrDelFavorite(id, null, true);
-    assert.equal(calls.filter(c => c.method === 'POST').length, 1, 'guard must be released after completion');
+    assert.equal(writes(), 1, 'guard must be released after completion');
   }
 });
 
@@ -225,7 +283,7 @@ test('both sources reject invalid IDs/pages before any requests', async () => {
 });
 
 test('favorite state appears in details when logged in, while public detail remains usable after session expiry', async () => {
-  const b = createSource(baoziFile, async url => html(url.includes('/my_bookshelf') ? bzShelf : fixture('baozi.detail.html')));
+  const b = bz(async url => html(url.includes('/my_bookshelf') ? bzShelf : fixture('baozi.detail.html')));
   b.source.saveData('account', ['synthetic']);
   assert.equal((await b.source.comic.loadInfo('feirenzai-fenzihudong')).isFavorite, true);
   const m = mh(async url => url.includes('/isfav') ? json({ code: 1 }) : html(fixture('mh1234.detail.html')));
