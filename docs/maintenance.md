@@ -10,6 +10,8 @@
 | 阅读页空白 | 阅读跳转、图片元素、登录状态 | `comic.loadEp` |
 | 图片 403 或签名失效 | Referer 与完整签名参数 | `onImageLoad` / 图片 URL 提取 |
 | 网站能登录但应用失败 | 实际阅读域名的 Cookie、登录成功判断 | `account.loginWithWebview` |
+| 网站书架报错或条目缺失 | 专属书架页面、分页、条目选择器 | 包子 `loadShelf`；1234 `favorites.loadComics` |
+| 收藏写入未确认 | 登录过期、切换接口响应、写入后的状态 | `favorites.addOrDelFavorite` |
 | 源修复后应用仍不提示更新 | key、version、脚本自身 url 与 index | `sources` 顶部元数据 + `npm run build` |
 
 改域名前确认新入口确实属于同一网站、页面结构和编号规则兼容。漫画1234的登录、权限查询和图片请求还引用阅读域名，主站地址设置不会自动替换它们。
@@ -24,7 +26,7 @@ npm run build
 npm run verify
 ```
 
-`npm test` 检查源解析、登录判断、权限响应、发布元数据与版本递增规则。
+`npm test` 检查源解析、登录判断、权限响应、书架解析、重复收藏操作、发布元数据与版本递增规则。账号测试均使用模拟响应，不会登录或修改真实网站账号。
 `npm run verify` 还会检查生成文件是否最新，并对 `dist` 发布脚本运行相同的图源回归测试。
 
 网络检查需要网站可访问；不会登录账号、购买章节或下载漫画图片。图片仅发 HEAD 请求。
@@ -55,7 +57,13 @@ npm run live:mh1234
 - 分类：维护 `category.parts` 和 `categoryComics.optionList/load`。
 - 入口切换：维护 `settings`，所有请求统一从设置读取主站地址。
 
-“网站书架”不同于 Venera 的本地收藏。只有网站提供书架并且脚本实现相应接口后，才能读写网站收藏；本仓库尚未实现这部分。
+“网站书架”不同于 Venera 的本地收藏。本仓库已接入两个网站的收藏读写，真实账号页面仍需要在 Venera 验证。
+
+包子使用 `/api/bui/signin` 登录，将 TSID 写入当前入口域名，然后读取 `/user/my_bookshelf` 确认会话。专属书架与访客临时书架不可混用。写入收藏前后读取书架确认状态；已有收藏不重复 `set_bookmark`，避免重置网站阅读位置。
+
+漫画1234所有账号/书架请求固定使用 `reader.hqread.cc`：`api/user/info` 确认有效会话，`rend/isfav` 读取收藏状态，`rend/favadd` 切换状态。切换接口不是幂等的“设置为收藏”，因此必须先读当前状态，提交一次后检查返回的 `cid`；网络错误时不自动重试。分页路径为 `/user/fav/index/N`，不能用固定只返回 10 条的 `rend/fav` 接口替代完整书架。
+
+接口和页面确认依据、模拟测试覆盖范围见 [账号功能验证记录](accounts-verification.md)。
 
 ## 恢复误改
 

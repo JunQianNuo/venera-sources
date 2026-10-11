@@ -16,8 +16,8 @@ https://raw.githubusercontent.com/JunQianNuo/venera-sources/main/index.json
 
 也可以按链接导入发布脚本：
 
-- [包子漫画 1.0.1](https://raw.githubusercontent.com/JunQianNuo/venera-sources/main/dist/baozi_fixed.js)
-- [漫画1234 1.1.1](https://raw.githubusercontent.com/JunQianNuo/venera-sources/main/dist/mh1234_fixed.js)
+- [包子漫画 1.1.0](https://raw.githubusercontent.com/JunQianNuo/venera-sources/main/dist/baozi_fixed.js)
+- [漫画1234 1.2.0](https://raw.githubusercontent.com/JunQianNuo/venera-sources/main/dist/mh1234_fixed.js)
 
 最低声明版本为 Venera 1.4.0。尚未在用户手机上验证；实际兼容性以使用的 Venera / Venera Prime 分支为准。
 
@@ -28,11 +28,22 @@ https://raw.githubusercontent.com/JunQianNuo/venera-sources/main/index.json
 | 首页、搜索、详情、章节阅读 | 已实现 | 已实现 |
 | 分类筛选 | 类型、地区、连载状态 | 题材、连载状态、排序 |
 | 入口设置 | 3 个简繁入口可切换 | 可填写网站地址 |
-| 网站登录 | 未实现 | 网站自身页面登录 |
-| 网站书架同步 | 未实现 | 未实现 |
+| 网站登录 | 邮箱和密码登录，校验专属书架 | 网站自身页面登录 |
+| 网站书架同步 | 读取专属书架、收藏和取消收藏 | 分页读取网站书架、收藏和取消收藏 |
 | 本地收藏、阅读记录 | 由 Venera 管理 | 由 Venera 管理 |
 
-Venera 提供账号、收藏和设置接口，网站端功能仍需要每个图源适配。[官方图源文档](https://github.com/venera-app/venera/blob/master/doc/comic_source.md)。漫画1234登录使用阅读域名 `reader.hqread.cc`；登录和权限错误已用模拟响应验证，尚未用真实账号验证。登录不保证能读取账号没有权限的章节。
+Venera 提供账号、收藏和设置接口，网站端功能仍需要每个图源适配。[官方图源文档](https://github.com/venera-app/venera/blob/master/doc/comic_source.md)。漫画1234登录使用阅读域名 `reader.hqread.cc`。登录、书架和收藏操作已有模拟测试，尚未用真实账号验证；账号书架条目的解析仍需在手机上确认。登录不保证能读取账号没有权限的章节。
+
+## 登录和使用网站书架
+
+1. 在漫画源管理中更新两个图源，打开该图源的账号选项。
+2. 包子漫画使用网站账号的邮箱和密码登录；漫画1234选择网页登录，在网站页面自行输入账号、密码和验证码。网站成功跳转后 Venera 应结束网页登录。
+3. 打开 Venera 的收藏页面，选择对应图源的网站收藏。详情页收藏时选择对应网站收藏，即可写回网站；只加入本地收藏不会写回网站。
+4. 首次验证可选择一部原本没有收藏的漫画，加入网站书架，在浏览器确认，然后取消该测试收藏并再次确认。已有收藏不必删除。
+
+这次同步包含网站书架的读取、加入和移除，不会自动合并所有本地收藏，也不包含网站阅读进度同步。包子切换入口后需要在新入口重新登录；漫画1234主站地址设置不会改变固定的阅读/登录域名。登录过期时会提示重新登录，无法确认写入结果时会提示先刷新书架，避免盲目重复操作。
+
+如果出现“书架结构已改变”，请反馈图源版本和错误文字，不要发送账号密码、Cookie 或完整未脱敏日志。
 
 ## 快速修复并更新
 

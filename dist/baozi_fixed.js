@@ -2,7 +2,7 @@
 class BaoziFixed extends ComicSource {
   name = "包子漫画（修订版）";
   key = "baozi_fixed";
-  version = "1.0.1";
+  version = "1.1.0";
   minAppVersion = "1.4.0";
   // 构建时会按 repository.json 写入本仓库的更新地址。
   url = "https://raw.githubusercontent.com/JunQianNuo/venera-sources/main/dist/baozi_fixed.js";
@@ -36,11 +36,16 @@ class BaoziFixed extends ComicSource {
     return element ? element.text.trim() : "";
   }
 
-  async request(url) {
-    const response = await Network.get(url, {
+  async request(url, method = "GET", data = "") {
+    const headers = {
       "User-Agent": "Mozilla/5.0",
       "Referer": this.baseUrl + "/"
-    });
+    };
+    if (method === "POST") {
+      headers["Content-Type"] = "application/x-www-form-urlencoded;charset=UTF-8";
+      headers["Origin"] = this.baseUrl;
+    }
+    const response = method === "POST" ? await Network.post(url, headers, data) : await Network.get(url, headers);
     const body = typeof response.body === "string" ? response.body : "";
     if (/challenge_required|<title>\s*Just a moment|cf-chl-/i.test(body)) {
       throw new Error("网站要求网页验证，请切换图源设置中的网站入口，或先在浏览器中确认网站能否打开。");
@@ -50,6 +55,81 @@ class BaoziFixed extends ComicSource {
     }
     return body;
   }
+
+  get account() {
+    return {
+      login: async (username, password) => {
+        const result = JSON.parse(await this.request(this.baseUrl + "/api/bui/signin", "POST",
+          "username=" + encodeURIComponent(username) + "&password=" + encodeURIComponent(password)));
+        if (result.result !== true || typeof result.data !== "string" || !result.data.trim()) {
+          throw new Error(/VERIFY|CAPTCHA/i.test(String(result.code || "")) ?
+            "网站要求验证，请先在网站完成验证后再登录。" : "登录失败，请检查邮箱和密码，或在网站确认账号状态。");
+        }
+        // 当前镜像不能使用网站脚本中硬编码的旧 baozimh.com Cookie 域。
+        Network.setCookies(this.baseUrl, [new Cookie({ name: "TSID", value: result.data, domain: this.baseUrl.slice(8) })]);
+        try { await this.loadShelf(); }
+        catch (error) { Network.deleteCookies(this.baseUrl); throw error; }
+      },
+      registerWebsite: this.baseUrl + "/user/signup",
+      logout: () => {
+        for (const entry of this.settings.endpoint.options) Network.deleteCookies(entry.value);
+      }
+    };
+  }
+
+  async loadShelf() {
+    const document = new HtmlDocument(await this.request(this.baseUrl + "/user/my_bookshelf"));
+    try {
+      if (document.querySelector("#mail, input[type=password]")) throw new Error("网站登录已失效，请在图源账号中重新登录；切换网站入口后也需要重新登录。");
+      const root = document.querySelector(".bookshelf");
+      if (!root) throw new Error("未找到网站书架，请检查登录状态或网站页面变化。");
+      if (/想要拥有专属书架|想要擁有專屬書架|临时书架|臨時書架/.test(this.text(root.querySelector(".pure-menu-selected"))) ||
+          /想要拥有专属书架|想要擁有專屬書架/.test(this.text(root))) {
+        throw new Error("网站返回了访客临时书架，请重新登录后读取专属书架。");
+      }
+      const rows = root.querySelectorAll(".bookshelf-items");
+      const comics = [];
+      for (const row of rows) {
+        const link = row.querySelector("h4 > a[href]");
+        const id = (link?.attributes["href"] || "").match(/\/comic\/([\w-]+)(?:[?#/]|$)/)?.[1];
+        const title = this.text(link);
+        if (!id || !title) throw new Error("网站书架条目结构已改变，请更新图源。");
+        const author = row.querySelectorAll(".info li").map(e => this.text(e)).find(text => /^作者[:：]/.test(text));
+        const image = row.querySelector("amp-img, img");
+        comics.push(new Comic({ id, title, subTitle: author?.replace(/^作者[:：]\s*/, "") || "",
+          cover: this.absoluteUrl(image?.attributes["data-src"] || image?.attributes["src"]) }));
+      }
+      if (!rows.length && !/没有追|沒有追|暂无|暫無|书架为空|書架為空/.test(this.text(root))) {
+        throw new Error("网站书架结构已改变，无法确认是否为空，请更新图源。");
+      }
+      return comics;
+    } finally { document.dispose(); }
+  }
+
+  favoriteOperations = new Set();
+
+  favorites = {
+    multiFolder: false,
+    loadComics: async page => {
+      if (!Number.isInteger(page) || page < 1) throw new Error("书架页码不正确。");
+      return { comics: page === 1 ? await this.loadShelf() : [], maxPage: 1 };
+    },
+    addOrDelFavorite: async (id, folderId, isAdding) => {
+      if (typeof id !== "string" || !/^[\w-]+$/.test(id)) throw new Error("漫画编号不正确。");
+      if (this.favoriteOperations.has(id)) throw new Error("当前漫画正在同步收藏，请稍后刷新书架。");
+      this.favoriteOperations.add(id);
+      try {
+        const present = (await this.loadShelf()).some(comic => comic.id === id);
+        // 已收藏时不重复 set_bookmark，避免将网站阅读位置重置至第零章。
+        if (present === isAdding) return;
+        await this.request(this.baseUrl + "/user/operation_v2?op=" + (isAdding ? "set_bookmark" : "del_bookmark") +
+          "&comic_id=" + encodeURIComponent(id) + (isAdding ? "&chapter_slot=0" : ""), "POST");
+        if ((await this.loadShelf()).some(comic => comic.id === id) !== isAdding) {
+          throw new Error("网站书架同步未生效，请刷新书架确认状态后重试。");
+        }
+      } finally { this.favoriteOperations.delete(id); }
+    }
+  };
 
   parseComic(element) {
     const link = element.querySelector("a[href]");
@@ -183,8 +263,13 @@ class BaoziFixed extends ComicSource {
             cover: this.absoluteUrl(item.querySelector("amp-img, img")?.attributes["src"])
           }));
         }
+        let isFavorite;
+        if (this.isLogged) {
+          try { isFavorite = (await this.loadShelf()).some(comic => comic.id === id); } catch (_) { /* 收藏状态失败不影响公开详情。 */ }
+        }
         return new ComicDetails({
           title,
+          isFavorite,
           cover: this.absoluteUrl(cover?.attributes["src"]),
           description: this.text(document.querySelector("p.comics-detail__desc")),
           tags: {

@@ -2,7 +2,7 @@
 class MH1234Fixed extends ComicSource {
   name = "漫画1234（新版网站）";
   key = "mh1234_fixed";
-  version = "1.1.1";
+  version = "1.2.0";
   minAppVersion = "1.4.0";
   url = "";
 
@@ -51,11 +51,17 @@ class MH1234Fixed extends ComicSource {
     return this.absoluteUrl(image?.attributes["data-src"] || image?.attributes["src"]);
   }
 
-  async request(url) {
-    const response = await Network.get(url, {
+  async request(url, method = "GET", data = "") {
+    const origin = url.startsWith("https://reader.hqread.cc/") ? "https://reader.hqread.cc" : this.baseUrl;
+    const headers = {
       "User-Agent": "Mozilla/5.0",
-      "Referer": url.startsWith("https://reader.hqread.cc/") ? "https://reader.hqread.cc/" : this.baseUrl + "/"
-    });
+      "Referer": origin + "/"
+    };
+    if (method === "POST") {
+      headers["Content-Type"] = "application/x-www-form-urlencoded;charset=UTF-8";
+      headers["Origin"] = origin;
+    }
+    const response = method === "POST" ? await Network.post(url, headers, data) : await Network.get(url, headers);
     if (response.status !== 200) {
       throw new Error("漫画1234请求失败（HTTP " + response.status + "），请检查网站地址或网络。");
     }
@@ -65,6 +71,75 @@ class MH1234Fixed extends ComicSource {
     }
     return body;
   }
+
+  async accountApi(path, method = "GET", data = "") {
+    return JSON.parse(await this.request("https://reader.hqread.cc/index.php/api/" + path, method, data));
+  }
+
+  async requireSession() {
+    const result = await this.accountApi("user/info");
+    if (Number(result.code) !== 1 || Number(result.data?.log) !== 1 || !(Number(result.data?.id) > 0)) {
+      throw new Error("网站登录已失效，请在图源账号选项中重新网页登录。");
+    }
+  }
+
+  async favoriteStatus(id) {
+    const result = await this.accountApi("rend/isfav?did=" + id + "&type=comic");
+    if (Number(result.code) === 1) return true;
+    if (Number(result.code) === -1 && result.msg === "未收藏") return false;
+    throw new Error("无法确认网站收藏状态：" + String(result.msg || "请刷新后重试"));
+  }
+
+  favoriteOperations = new Set();
+
+  favorites = {
+    multiFolder: false,
+    loadComics: async page => {
+      if (!Number.isInteger(page) || page < 1) throw new Error("书架页码不正确。");
+      await this.requireSession();
+      const url = "https://reader.hqread.cc/user/fav" + (page > 1 ? "/index/" + page : "");
+      const document = new HtmlDocument(await this.request(url));
+      try {
+        const root = document.querySelector('[data-mint-page="shelf"]');
+        if (!root) throw new Error("未找到网站书架，请重新登录或更新图源。");
+        const comics = [];
+        const rows = root.querySelectorAll("[data-mint-shelf-item]");
+        for (const row of rows) {
+          const link = row.querySelector('a[href*="/comic/"]');
+          const id = (link?.attributes["href"] || "").match(/\/comic\/([1-9]\d*)\.html(?:[?#]|$)/)?.[1];
+          if (!id) throw new Error("网站书架条目结构已改变，请更新图源。");
+          const title = this.text(row.querySelector("h3, h2, strong")) || this.text(link);
+          if (!title) throw new Error("未找到网站书架漫画名称，请更新图源。");
+          const image = row.querySelector("img");
+          comics.push(new Comic({ id, title,
+            cover: this.absoluteUrl(image?.attributes["data-src"] || image?.attributes["src"], "https://reader.hqread.cc") }));
+        }
+        if (!rows.length && !root.querySelector(".mint-shelf-empty")) throw new Error("网站书架结构已改变，无法确认是否为空。");
+        let maxPage = page;
+        const pages = Number(root.querySelector(".mint-pagination[data-pages]")?.attributes["data-pages"]);
+        if (Number.isInteger(pages) && pages > 0) maxPage = Math.max(maxPage, pages);
+        for (const link of document.querySelectorAll('a[href*="/user/fav/index/"]')) {
+          const match = (link.attributes["href"] || "").match(/\/user\/fav\/index\/(\d+)\/?(?:[?#]|$)/);
+          if (match) maxPage = Math.max(maxPage, Number(match[1]));
+        }
+        return { comics, maxPage };
+      } finally { document.dispose(); }
+    },
+    addOrDelFavorite: async (id, folderId, isAdding) => {
+      if (typeof id !== "string" || !/^[1-9]\d*$/.test(id)) throw new Error("漫画编号不正确。");
+      if (this.favoriteOperations.has(id)) throw new Error("当前漫画正在同步收藏，请稍后刷新书架。");
+      this.favoriteOperations.add(id);
+      try {
+        await this.requireSession();
+        if (await this.favoriteStatus(id) === isAdding) return;
+        // 网站接口是切换状态，不可直接重试，否则可能撤销上一次成功操作。
+        const result = await this.accountApi("rend/favadd", "POST", "did=" + id + "&type=comic");
+        if (Number(result.code) !== 1 || ![0, 1].includes(result.cid) || Boolean(result.cid) !== isAdding) {
+          throw new Error("网站收藏同步状态未确认，请刷新书架后重试。" + String(result.msg || ""));
+        }
+      } finally { this.favoriteOperations.delete(id); }
+    }
+  };
 
   parseCard(element) {
     const link = element.attributes["href"] ? element : element.querySelector("a[href]");
@@ -207,8 +282,13 @@ class MH1234Fixed extends ComicSource {
         const metadata = document.querySelectorAll(".mint-work-info > p");
         const author = this.text(metadata[0]).replace(/\s*著$/, "").trim();
         const tags = this.text(metadata[1]).split(/\s+/).filter(Boolean);
+        let isFavorite;
+        if (this.isLogged) {
+          try { await this.requireSession(); isFavorite = await this.favoriteStatus(id); } catch (_) { /* 收藏状态失败不影响公开详情。 */ }
+        }
         return new ComicDetails({
           title,
+          isFavorite,
           cover: this.absoluteUrl(document.querySelector("#mintWorkCover")?.attributes["src"]),
           description: this.text(document.querySelector("#mintIntroPanel > div")),
           tags: { "作者": author ? [author] : [], "标签": tags },

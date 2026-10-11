@@ -10,4 +10,4 @@
 - [漫画1234网站检查通过](https://github.com/JunQianNuo/venera-sources/actions/runs/38131221807)：首页、分类、搜索、详情、19天序章 9 张、恋爱四选一第 1 话 102 张，抽样图片 HEAD 返回 200。
 - [包子漫画网站检查通过](https://github.com/JunQianNuo/venera-sources/actions/runs/38131224880)：首页、分类、搜索、详情、非人哉首章 36 张，以及备用入口和抽样图片 HEAD。
 
-网页检查使用 GitHub Linux runner 和 Venera API 模拟环境。尚未验证用户手机运行环境或真实账号登录。网站书架同步尚未实现。检查通过仅代表所测试页面和章节当时可用。
+网页检查使用 GitHub Linux runner 和 Venera API 模拟环境。尚未验证用户手机运行环境或真实账号登录。初始化版本未实现网站书架同步；后续账号与书架扩展见 [账号功能验证记录](accounts-verification.md)。检查通过仅代表所测试页面和章节当时可用。
