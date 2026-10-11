@@ -2,7 +2,7 @@
 class MH1234Fixed extends ComicSource {
   name = "漫画1234（新版网站）";
   key = "mh1234_fixed";
-  version = "1.2.0";
+  version = "1.2.1";
   minAppVersion = "1.4.0";
   url = "https://raw.githubusercontent.com/JunQianNuo/venera-sources/main/dist/mh1234_fixed.js";
 
@@ -105,10 +105,12 @@ class MH1234Fixed extends ComicSource {
         const comics = [];
         const rows = root.querySelectorAll("[data-mint-shelf-item]");
         for (const row of rows) {
-          const link = row.querySelector('a[href*="/comic/"]');
+          // 书架卡片自身也可能是 <a>；querySelector 只查子元素，会漏掉自身。
+          const link = [row, ...row.querySelectorAll("a[href]")].find(element =>
+            /\/comic\/([1-9]\d*)\.html(?:[?#]|$)/.test(element.attributes["href"] || ""));
           const id = (link?.attributes["href"] || "").match(/\/comic\/([1-9]\d*)\.html(?:[?#]|$)/)?.[1];
           if (!id) throw new Error("网站书架条目结构已改变，请更新图源。");
-          const title = this.text(row.querySelector("h3, h2, strong")) || this.text(link);
+          const title = this.text(row.querySelector(".user-list__title, h3, h2, strong")) || this.text(link);
           if (!title) throw new Error("未找到网站书架漫画名称，请更新图源。");
           const image = row.querySelector("img");
           comics.push(new Comic({ id, title,

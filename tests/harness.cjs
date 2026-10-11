@@ -16,18 +16,20 @@ class HtmlDocument extends Element {
 }
 const root = path.resolve(__dirname, '..');
 function fixture(name) { return fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8'); }
-function createSource(file = process.env.SOURCE_FILE || 'baozi_fixed.js', network) {
+function createSource(file = process.env.SOURCE_FILE || 'baozi_fixed.js', network, options = {}) {
   const requests = [];
   const calls = [];
   const deletedCookies = [];
   const cookies = [];
   const data = new Map();
+  let registered = options.registered !== false;
+  const requireRegistration = () => { if (!registered) throw new Error('source has not been registered by Venera'); };
   class ComicSource {
-    loadSetting(key) { return this.settings?.[key]?.default; }
-    loadData(key) { return data.get(key); }
+    loadSetting(key) { requireRegistration(); return this.settings?.[key]?.default; }
+    loadData(key) { requireRegistration(); return data.get(key); }
     saveData(key, value) { data.set(key, value); }
     deleteData(key) { data.delete(key); }
-    get isLogged() { return !!data.get('account'); }
+    get isLogged() { requireRegistration(); return !!data.get('account'); }
   }
   async function request(method, url, headers, body) {
     requests.push(url);
@@ -57,6 +59,6 @@ function createSource(file = process.env.SOURCE_FILE || 'baozi_fixed.js', networ
   const code = fs.readFileSync(path.resolve(root, file.includes('/') || file.includes('\\') ? file : 'sources/' + file), 'utf8');
   const className = code.match(/class\s+(\w+)\s+extends\s+ComicSource/)[1];
   vm.runInContext(code + '\n globalThis.source = new ' + className + '();', context);
-  return { source: context.source, requests, calls, deletedCookies, cookies };
+  return { source: context.source, requests, calls, deletedCookies, cookies, register: () => { registered = true; } };
 }
 module.exports = { createSource, fixture };

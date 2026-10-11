@@ -11,6 +11,7 @@
 | 图片 403 或签名失效 | Referer 与完整签名参数 | `onImageLoad` / 图片 URL 提取 |
 | 网站能登录但应用失败 | 实际阅读域名的 Cookie、登录成功判断 | `account.loginWithWebview` |
 | 网站书架报错或条目缺失 | 专属书架页面、分页、条目选择器 | 包子 `loadShelf`；1234 `favorites.loadComics` |
+| 安装图源时 load_setting 报空值异常 | 解析配置阶段是否提前调用运行时设置接口 | `account` 等配置对象；字段读取时不得调用 `loadSetting` |
 | 收藏写入未确认 | 登录过期、切换接口响应、写入后的状态 | `favorites.addOrDelFavorite` |
 | 源修复后应用仍不提示更新 | key、version、脚本自身 url 与 index | `sources` 顶部元数据 + `npm run build` |
 
@@ -64,6 +65,10 @@ npm run live:mh1234
 漫画1234所有账号/书架请求固定使用 `reader.hqread.cc`：`api/user/info` 确认有效会话，`rend/isfav` 读取收藏状态，`rend/favadd` 切换状态。切换接口不是幂等的“设置为收藏”，因此必须先读当前状态，提交一次后检查返回的 `cid`；网络错误时不自动重试。分页路径为 `/user/fav/index/N`，不能用固定只返回 10 条的 `rend/fav` 接口替代完整书架。
 
 接口和页面确认依据、模拟测试覆盖范围见 [账号功能验证记录](accounts-verification.md)。
+
+Venera 在注册原生图源对象之前读取账号等配置。`loadSetting`、`loadData`、`isLogged` 此时还不能使用，应延迟到用户触发的回调中调用。包子的注册网页地址固定使用默认入口，实际登录和书架请求仍使用用户选择的入口。
+
+书架条目可能自身就是 `<a href="/comic/编号.html">`，解析链接时应同时检查条目自身与内部链接。仅对条目调用 `querySelector` 会漏掉自身链接。
 
 ## 恢复误改
 

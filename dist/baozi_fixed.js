@@ -2,7 +2,7 @@
 class BaoziFixed extends ComicSource {
   name = "包子漫画（修订版）";
   key = "baozi_fixed";
-  version = "1.1.0";
+  version = "1.1.1";
   minAppVersion = "1.4.0";
   // 构建时会按 repository.json 写入本仓库的更新地址。
   url = "https://raw.githubusercontent.com/JunQianNuo/venera-sources/main/dist/baozi_fixed.js";
@@ -70,7 +70,8 @@ class BaoziFixed extends ComicSource {
         try { await this.loadShelf(); }
         catch (error) { Network.deleteCookies(this.baseUrl); throw error; }
       },
-      registerWebsite: this.baseUrl + "/user/signup",
+      // Venera 在注册图源之前读取账号配置，此处不能调用 loadSetting/baseUrl。
+      registerWebsite: "https://cn.webmota.com/user/signup",
       logout: () => {
         for (const entry of this.settings.endpoint.options) Network.deleteCookies(entry.value);
       }

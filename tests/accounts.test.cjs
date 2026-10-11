@@ -12,6 +12,22 @@ const mhEmpty = '<main data-mint-page="shelf"><div class="mint-shelf-empty">暂�
 const mhShelf = '<main data-mint-page="shelf"><article data-mint-shelf-item><a href="/go/abc">继续阅读</a><a href="/comic/16838.html"><img data-src="https://example.com/19.jpg?st=fixture&e=2000000000" src="/placeholder.svg"><h3>19天</h3></a></article><article data-mint-shelf-item><a href="/comic/47315.html"><img src="/cover.jpg"><h3>恋爱四选一</h3></a></article><div class="mint-pagination" data-pages="3"><a href="/user/fav/index/3">末页</a></div></main><section class="recommend"><article class="comic-card"><a href="/comic/999.html"><h3>推荐</h3></a></article></section>';
 const member = { code: 1, data: { log: 1, id: 123 } };
 
+test('Venera can parse source configuration before registering runtime settings', () => {
+  for (const file of [baoziFile, mhFile]) {
+    const { source, register, calls } = createSource(file, undefined, { registered: false });
+    const account = source.account;
+    assert.equal(typeof account.registerWebsite, 'string');
+    assert.equal(typeof account.logout, 'function');
+    assert.ok(account.login || account.loginWithWebview);
+    assert.equal(typeof source.favorites.loadComics, 'function');
+    assert.equal(typeof source.comic.loadInfo, 'function');
+    assert.ok(source.settings);
+    assert.equal(calls.length, 0);
+    register();
+    assert.match(source.baseUrl, /^https:\/\//);
+  }
+});
+
 test('Baozi: login encodes credentials, sets TSID only on the selected host and validates the private shelf', async () => {
   const { source, calls, cookies } = createSource(baoziFile, async (url, headers, req) => {
     if (url.endsWith('/api/bui/signin')) {
@@ -93,13 +109,13 @@ test('Baozi: expired sessions and unsuccessful writes cannot silently succeed', 
   await assert.rejects(() => failed.source.favorites.addOrDelFavorite('id', null, true), /未生效|同步/);
 });
 
-test('Baozi: logout clears every configured entry and registration uses current entry', () => {
+test('Baozi: logout clears every configured entry and registration URL stays safe during parsing', () => {
   const { source, deletedCookies } = createSource(baoziFile);
   assert.equal(source.account.registerWebsite, 'https://cn.webmota.com/user/signup');
   source.account.logout();
   assert.equal(deletedCookies.length, 3);
   source.loadSetting = () => 'https://tw.dinnerku.com';
-  assert.equal(source.account.registerWebsite, 'https://tw.dinnerku.com/user/signup');
+  assert.equal(source.account.registerWebsite, 'https://cn.webmota.com/user/signup');
 });
 
 function mh(network) {
@@ -119,6 +135,15 @@ test('MH1234: shelf uses reader session, excludes recommendations and keeps real
   await source.favorites.loadComics(2);
   assert.equal(calls.at(-1).url, 'https://reader.hqread.cc/user/fav/index/2');
   assert.equal(calls.at(-1).headers.Referer, 'https://reader.hqread.cc/');
+});
+
+test('MH1234: shelf entry itself can be the comic link, including one-item shelves', async () => {
+  const body = '<main data-mint-page="shelf"><div class="mint-shelf-list"><a data-mint-shelf-item class="user-list__item" href="/comic/54739.html"><div class="user-list__cover"><img src="/cover.jpg"></div><div class="user-list__content"><div class="user-list__title">测试漫画</div><p>最新章节</p></div></a></div><div class="mint-shelf-empty" hidden>暂无收藏</div></main>';
+  const { source } = mh(async () => html(body));
+  const result = await source.favorites.loadComics(1);
+  assert.deepEqual(Array.from(result.comics, comic => comic.id), ['54739']);
+  assert.equal(result.comics[0].title, '测试漫画');
+  assert.equal(result.maxPage, 1);
 });
 
 test('MH1234: valid empty shelf differs from an expired session or changed markup', async () => {
