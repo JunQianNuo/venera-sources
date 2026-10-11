@@ -1,6 +1,6 @@
 # Venera Sources Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 建立可在 GitHub 托管并向 Venera 提供图源更新的仓库。
 
@@ -31,17 +31,17 @@
 
 **Interfaces:** `build(root, {check: boolean})` 生成或校验 index/dist；`validateConfig(config)` 校验配置。
 
-- [ ] 保留现有 20 个测试，将 harness 指向 sources 和 tests/fixtures。
-- [ ] 写发布测试：调用 build，断言 index 的 key/version/url 与 dist 脚本完全一致；断言配置、重复 key、语法和过期文件错误。
-- [ ] `node --test tests/build.test.cjs` 确认缺少构建模块时失败。
-- [ ] 实现 build/configure；`npm test` 确认全部通过。
+- [x] 保留现有 20 个测试，将 harness 指向 sources 和 tests/fixtures。
+- [x] 写发布测试：调用 build，断言 index 的 key/version/url 与 dist 脚本完全一致；断言配置、重复 key、语法和过期文件错误。
+- [x] `node --test tests/build.test.cjs` 确认缺少构建模块时失败。
+- [x] 实现 build/configure；`npm test` 确认全部通过。
 
 ### Task 2: Delivery and maintenance
 
 **Files:** `.github/workflows/check.yml`, `.github/workflows/live.yml`, `README.md`, `docs/maintenance.md`, `.gitignore`, `.gitattributes`。
 
-- [ ] CI 执行 `npm ci`、`npm test`、`npm run build:check`。
-- [ ] 手动 live workflow 执行网络检查并上传脱敏报告。
-- [ ] README 写清账号配置、Venera 添加索引、旧本地源一次性迁移和功能限制。
-- [ ] 使用 `npm run verify` 验证完整仓库，检查打包文件不含 node_modules、日志、Cookie。
-- [ ] GitHub 授权和公开范围确认后配置真实地址，生成提交并推送；未授权时交付本地目录和 ZIP。
+- [x] CI 执行 `npm ci`、`npm test`、`npm run build:check`。
+- [x] 手动 live workflow 执行网络检查并上传脱敏报告。
+- [x] README 写清账号配置、Venera 添加索引、旧本地源一次性迁移和功能限制。
+- [x] 使用 `npm run verify` 验证完整仓库，检查打包文件不含 node_modules、日志、Cookie。
+- [x] GitHub 授权和公开范围确认后配置真实地址，生成提交并推送；未授权时交付本地目录和 ZIP。
