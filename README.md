@@ -16,7 +16,7 @@ https://raw.githubusercontent.com/JunQianNuo/venera-sources/main/index.json
 
 也可以按链接导入发布脚本：
 
-- [包子漫画 1.1.2](https://raw.githubusercontent.com/JunQianNuo/venera-sources/main/dist/baozi_fixed.js)
+- [包子漫画 1.1.3](https://raw.githubusercontent.com/JunQianNuo/venera-sources/main/dist/baozi_fixed.js)
 - [漫画1234 1.2.2](https://raw.githubusercontent.com/JunQianNuo/venera-sources/main/dist/mh1234_fixed.js)
 
 最低声明版本为 Venera 1.4.0。尚未在用户手机上验证；实际兼容性以使用的 Venera / Venera Prime 分支为准。
@@ -48,6 +48,8 @@ Venera 提供账号、收藏和设置接口，网站端功能仍需要每个图�
 包子 1.1.0 若出现安装时的 `Null check operator used on a null value`，请刷新仓库并安装 1.1.1。漫画1234 1.2.0 收藏后书架报条目结构错误时，更新至 1.2.1 后刷新网站收藏；已成功写入网站的漫画不需要重复收藏。
 
 包子 1.1.2 改用官网收藏链接的 GET 请求方式。两个图源的书架和收藏状态查询禁用 Venera 请求缓存，避免立即刷新或取消收藏时读取旧状态。更新后请用真实账号确认加入、刷新和取消操作。
+
+包子 1.1.3 进一步为私有书架和收藏 GET 请求加入唯一查询参数，绕过网站 CDN 缓存。主站曾返回“专属书架(1)”却没有漫画条目的缓存页，导致空书架也报结构错误；更新后退出账号、重新登录再验证收藏。
 
 ## 快速修复并更新
 

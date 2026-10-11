@@ -2,7 +2,7 @@
 class BaoziFixed extends ComicSource {
   name = "包子漫画（修订版）";
   key = "baozi_fixed";
-  version = "1.1.2";
+  version = "1.1.3";
   minAppVersion = "1.4.0";
   // 构建时会按 repository.json 写入本仓库的更新地址。
   url = "";
@@ -45,6 +45,10 @@ class BaoziFixed extends ComicSource {
       // Venera 会复用五秒内的 GET，即使期间已经修改网站收藏。
       headers["cache-time"] = "no";
       headers["Cache-Control"] = "no-cache";
+      // 网站 CDN 仍可能缓存账号页面并忽略 Cookie，私有 GET 使用唯一 URL。
+      if (method === "GET") {
+        url += (url.includes("?") ? "&" : "?") + "_venera_nc=" + Date.now() + "-" + Math.random().toString(36).slice(2);
+      }
     }
     if (method === "POST") {
       headers["Content-Type"] = "application/x-www-form-urlencoded;charset=UTF-8";

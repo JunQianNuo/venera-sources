@@ -45,7 +45,7 @@ test('Baozi: login encodes credentials, sets TSID only on the selected host and 
   });
   assert.equal(typeof source.account?.login, 'function');
   await source.account.login('a+b@example.com', 'a&b=中文');
-  assert.equal(calls.at(-1).url, 'https://cn.webmota.com/user/my_bookshelf');
+  assert.equal(new URL(calls.at(-1).url).pathname, '/user/my_bookshelf');
   assert.equal(cookies[0].url, 'https://cn.webmota.com');
   assert.equal(cookies[0].values[0].name, 'TSID');
   assert.equal(cookies[0].values[0].domain, 'cn.webmota.com');
@@ -127,6 +127,37 @@ test('Baozi: favorite writes follow the website GET link rather than posting an 
     await source.favorites.addOrDelFavorite('feirenzai-fenzihudong', null, adding);
     assert.equal(calls.filter(c => c.url.includes('/operation_v2?')).length, 1);
   }
+});
+
+test('Baozi: bypass shared CDN pages that ignore cookies and no-cache headers', async () => {
+  let present = false;
+  // Observed anonymous response: selected shelf says (1), but there are no rows.
+  const cached = new Map([['https://cn.webmota.com/user/my_bookshelf', html(
+    '<div class="bookshelf"><li class="pure-menu-selected">专属书架 (1)</li><!----><!----><div class="recommend"><a href="/comic/unrelated">推荐</a></div></div>'
+  )]]);
+  let writes = 0;
+  const { source, calls } = bz(async (url, headers, req) => {
+    // Cloudflare HIT ignores the request Cache-Control and the local cache flag.
+    if (cached.has(url)) return cached.get(url);
+    const target = new URL(url);
+    if (target.pathname === '/user/operation_v2') {
+      assert.equal(req.method, 'GET');
+      present = target.searchParams.get('op') === 'set_bookmark';
+      writes++;
+    }
+    const response = html(present ? bzShelf : bzEmpty);
+    cached.set(url, response);
+    return response;
+  });
+  assert.equal((await source.favorites.loadComics(1)).comics.length, 0);
+  for (let cycle = 0; cycle < 2; cycle++) {
+    await source.favorites.addOrDelFavorite('feirenzai-fenzihudong', null, true);
+    assert.equal((await source.favorites.loadComics(1)).comics[0].id, 'feirenzai-fenzihudong');
+    await source.favorites.addOrDelFavorite('feirenzai-fenzihudong', null, false);
+    assert.equal((await source.favorites.loadComics(1)).comics.length, 0);
+  }
+  assert.equal(writes, 4, 'a repeated add must reach the origin after removal');
+  assert.equal(new Set(calls.map(c => c.url)).size, calls.length);
 });
 
 for (const file of [baoziFile, mhFile]) {
